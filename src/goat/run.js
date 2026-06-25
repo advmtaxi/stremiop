@@ -4,7 +4,7 @@ import { unlock } from './lock.js'
 import { loadWatch } from '../streamed/watch.js'
 import { parseInput, relayLink } from './parse.js'
 
-export async function run(input, origin) {
+export async function run(input, origin, clientIp) {
   let slot
   let meta
 
@@ -25,7 +25,7 @@ export async function run(input, origin) {
   }
 
   try {
-    const { body, goat } = await postFetch(encodeBody(slot), slot)
+    const { body, goat } = await postFetch(encodeBody(slot), slot, clientIp)
     const m3u8 = await unlock(slot, goat, body)
     return {
       ok: true,

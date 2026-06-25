@@ -1,15 +1,18 @@
 import { ua } from '../env.js'
 
-export async function postFetch(body, slot) {
+export async function postFetch(body, slot, clientIp) {
   const referer = `${slot.origin}/embed/${slot.path}`
+  const headers = {
+    'Content-Type': 'application/octet-stream',
+    Origin: slot.origin,
+    Referer: referer,
+    'User-Agent': ua,
+  }
+  if (clientIp) headers['X-Forwarded-For'] = clientIp
+
   const res = await fetch(`${slot.origin}/fetch`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      Origin: slot.origin,
-      Referer: referer,
-      'User-Agent': ua,
-    },
+    headers,
     body,
   })
   if (!res.ok) {
