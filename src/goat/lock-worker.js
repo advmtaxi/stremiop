@@ -185,9 +185,23 @@ async function crack(slot, goat, bodyHex) {
   const origInstantiate = WebAssembly.instantiate.bind(WebAssembly)
 
   WebAssembly.instantiate = async (source, imports) => {
+    try {
+      console.log('--- WebAssembly.instantiate called! ---')
+      console.log('imports keys:', Object.keys(imports || {}))
+      for (const key of Object.keys(imports || {})) {
+        console.log(`imports[${key}] type:`, typeof imports[key])
+        if (imports[key] && typeof imports[key] === 'object') {
+          console.log(`imports[${key}] keys:`, Object.keys(imports[key]))
+        }
+      }
+    } catch (err) {
+      console.log('Log error:', err.message)
+    }
+
     patchImports(imports, NativeResponse, goat, body, (url) => {
       m3u8 = url
     })
+    
     if (!(source instanceof ArrayBuffer) && !ArrayBuffer.isView(source)) {
       source = wasmBytes.buffer.slice(wasmBytes.byteOffset, wasmBytes.byteOffset + wasmBytes.byteLength)
     }
