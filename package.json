@@ -12,5 +12,10 @@
   "dependencies": {
     "big-integer": "^1.6.52",
     "happy-dom": "^20.0.10"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "javascript-obfuscator": "^5.4.3",
+    "pkg": "^5.8.1"
   }
 }

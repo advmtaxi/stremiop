@@ -5,9 +5,9 @@ import { parentPort, workerData } from 'node:worker_threads'
 import { Window } from 'happy-dom'
 import { embedOrigin } from '../env.js'
 
-const vendorDir = join(dirname(fileURLToPath(import.meta.url)), 'vendor')
-const wasmPath = join(vendorDir, 'lock.wasm')
-const lockModuleUrl = pathToFileURL(join(vendorDir, 'lock-esm.mjs')).href
+const baseDir = workerData.baseDir || dirname(fileURLToPath(import.meta.url))
+const wasmPath = join(baseDir, 'vendor', 'lock.wasm')
+const lockModuleUrl = pathToFileURL(join(baseDir, 'vendor', 'lock-esm.mjs')).href
 const wasmBytes = readFileSync(wasmPath)
 
 function pageUrl(slot) {

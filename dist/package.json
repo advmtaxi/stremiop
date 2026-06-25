@@ -1,0 +1,4 @@
+{
+  "name": "addon",
+  "bin": "src/server.js"
+}

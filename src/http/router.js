@@ -4,6 +4,7 @@ import { serveStatic } from './static.js'
 import { fetchJson } from '../streamed/api.js'
 import { fetchLinks } from '../streamed/match.js'
 import { streamedOrigin } from '../env.js'
+import os from 'node:os'
 
 function json(res, status, body) {
   res.writeHead(status, { 
@@ -57,6 +58,21 @@ export async function route(req, res) {
     // ------------------------------------------
     // STREMIO ADDON PROTOCOL
     // ------------------------------------------
+
+    if (pathname === '/api/info') {
+      let localIp = '127.0.0.1'
+      const nets = os.networkInterfaces()
+      for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+          // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+          if (net.family === 'IPv4' && !net.internal) {
+            localIp = net.address
+            // keep looking? no, usually the first non-internal IPv4 is the LAN IP
+          }
+        }
+      }
+      return json(res, 200, { localIp, port: loc.port || '7860' })
+    }
 
     // 1. Manifest
     if (pathname === '/manifest.json') {
@@ -137,6 +153,8 @@ export async function route(req, res) {
                   title: `Stream ${link.streamNo} | ${quality} | ${lang}\n${viewers}`,
                   url: result.relay
                 })
+              } else {
+                console.error(`[Stream ${link.streamNo}] resolve failed: stage=${result.stage} error=${result.error}`)
               }
             } catch (e) {
               console.error(`Failed resolving stream ${link.streamNo} for ${source.source}:`, e)
