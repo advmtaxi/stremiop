@@ -106,39 +106,54 @@ function mockFetch(NativeResponse, goat, body, onM3u8) {
 }
 
 function patchImports(imports, NativeResponse, goat, body, onM3u8) {
-  const bg = imports?.['./locked_bg.js']
-  if (!bg) return
+  // Obfuscator may have renamed the module key, so find the object
+  const keys = Object.keys(imports || {})
+  let bgKey = keys.find(k => k === './locked_bg.js' || k === 'wbg')
+  if (!bgKey && keys.length > 0) {
+    bgKey = keys.find(k => typeof imports[k] === 'object')
+  }
+  
+  if (!bgKey || !imports[bgKey]) return
+  
+  const bg = imports[bgKey]
+  const newBg = { ...bg } // Clone to avoid TypeError on frozen namespace objects
 
-  for (const key of Object.keys(bg)) {
+  for (const key of Object.keys(newBg)) {
     if (!key.includes('instanceof')) continue
-    const orig = bg[key]
-    bg[key] = (...args) => (orig(...args) ? 1 : 1)
+    const orig = newBg[key]
+    if (typeof orig === 'function') {
+      newBg[key] = (...args) => (orig(...args) ? 1 : 1)
+    }
   }
 
-  const fetchKey = Object.keys(bg).find((k) => k.includes('fetch_e6e8e0'))
-  if (!fetchKey) return
-
-  bg[fetchKey] = (_win, req) => {
-    const href = req?.url ?? ''
-    if (href.includes('/fetch')) {
-      return Promise.resolve(
-        new NativeResponse(body, {
-          status: 200,
-          headers: { goat, 'Content-Type': 'application/octet-stream' },
-        }),
-      )
+  const fetchKey = Object.keys(newBg).find((k) => k.includes('fetch_e6e8e0'))
+  if (fetchKey) {
+    newBg[fetchKey] = (_win, req) => {
+      const href = req?.url ?? ''
+      if (href.includes('/fetch')) {
+        return Promise.resolve(
+          new NativeResponse(body, {
+            status: 200,
+            headers: { goat, 'Content-Type': 'application/octet-stream' },
+          }),
+        )
+      }
+      if (href.includes('.m3u8')) {
+        onM3u8(href)
+        return Promise.resolve(
+          new NativeResponse('#EXTM3U\n#EXT-X-VERSION:3\n', {
+            status: 200,
+            headers: { 'Content-Type': 'application/vnd.apple.mpegurl' },
+          }),
+        )
+      }
+      return Promise.reject(new Error(`unexpected wasm fetch ${href}`))
     }
-    if (href.includes('.m3u8')) {
-      onM3u8(href)
-      return Promise.resolve(
-        new NativeResponse('#EXTM3U\n#EXT-X-VERSION:3\n', {
-          status: 200,
-          headers: { 'Content-Type': 'application/vnd.apple.mpegurl' },
-        }),
-      )
-    }
-    return Promise.reject(new Error(`unexpected wasm fetch ${href}`))
   }
+  
+  // Ensure the WASM engine finds exactly what it expects
+  imports['./locked_bg.js'] = newBg
+  imports[bgKey] = newBg
 }
 
 async function crack(slot, goat, bodyHex) {
@@ -153,13 +168,14 @@ async function crack(slot, goat, bodyHex) {
   const origInstantiate = WebAssembly.instantiate.bind(WebAssembly)
 
   WebAssembly.instantiate = async (source, imports) => {
-    patchImports(imports, NativeResponse, goat, body, (url) => {
+    const newImports = { ...imports }
+    patchImports(newImports, NativeResponse, goat, body, (url) => {
       m3u8 = url
     })
     if (!(source instanceof ArrayBuffer) && !ArrayBuffer.isView(source)) {
       source = wasmBytes.buffer.slice(wasmBytes.byteOffset, wasmBytes.byteOffset + wasmBytes.byteLength)
     }
-    return origInstantiate(source, imports)
+    return origInstantiate(source, newImports)
   }
   WebAssembly.instantiateStreaming = async (_resp, imports) => WebAssembly.instantiate(wasmBytes, imports)
 
