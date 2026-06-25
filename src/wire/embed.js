@@ -8,7 +8,6 @@ export async function postFetch(body, slot, clientIp) {
     Referer: referer,
     'User-Agent': ua,
   }
-  if (clientIp) headers['X-Forwarded-For'] = clientIp
 
   const res = await fetch(`${slot.origin}/fetch`, {
     method: 'POST',

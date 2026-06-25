@@ -135,17 +135,7 @@ export async function route(req, res) {
                 streams.push({
                   name: `Streamed.pk\n${source.source.toUpperCase()}`,
                   title: `Stream ${link.streamNo} | ${quality} | ${lang}\n${viewers}`,
-                  url: result.m3u8,
-                  behaviorHints: {
-                    notWebReady: true,
-                    proxyHeaders: {
-                      request: {
-                        "Origin": "https://embed.st",
-                        "Referer": "https://embed.st/",
-                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
-                      }
-                    }
-                  }
+                  url: result.relay
                 })
               }
             } catch (e) {
