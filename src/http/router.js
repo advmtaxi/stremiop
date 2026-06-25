@@ -47,7 +47,8 @@ export async function route(req, res) {
   const proto = req.headers['x-forwarded-proto'] || 'http'
   const host = req.headers['x-forwarded-host'] || req.headers.host
   const loc = new URL(req.url ?? '/', `${proto}://${host}`)
-  const { pathname, searchParams, origin } = loc
+  const { searchParams, origin } = loc
+  const pathname = decodeURIComponent(loc.pathname)
   
   // Extract real client IP if proxied
   const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress
