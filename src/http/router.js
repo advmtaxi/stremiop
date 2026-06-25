@@ -2,6 +2,7 @@ import { serve } from '../relay/m3u8.js'
 import { run } from '../goat/run.js'
 import { serveStatic } from './static.js'
 import { fetchJson } from '../streamed/api.js'
+import { fetchLinks } from '../streamed/match.js'
 import { streamedOrigin } from '../env.js'
 
 function json(res, status, body) {
@@ -117,31 +118,40 @@ export async function route(req, res) {
       const streams = []
       
       for (const source of match.sources) {
-        // Many sources have multiple streams (e.g. stream 1, 2, 3)
-        // Let's attempt to resolve stream 1 for each source
         try {
-          const body = { matchId: match.id, source: source.source, stream: 1 }
-          const result = await run(body, origin, clientIp)
-          console.log(`Resolved source ${source.source}:`, result)
+          const links = await fetchLinks(source.source, source.id)
           
-          if (result.ok && result.m3u8) {
-            streams.push({
-              name: `Streamed.pk\n${source.source.toUpperCase()}`,
-              title: `Live Stream 1`,
-              url: result.m3u8,
-              behaviorHints: {
-                notWebReady: true,
-                proxyHeaders: {
-                  request: {
-                    "Origin": "https://embed.st",
-                    "Referer": "https://embed.st/"
+          for (const link of links) {
+            try {
+              const body = { matchId: match.id, source: source.source, stream: link.streamNo }
+              const result = await run(body, origin, clientIp)
+              
+              if (result.ok && result.m3u8) {
+                const quality = link.hd ? 'HD' : 'SD'
+                const lang = link.language ? link.language.toUpperCase() : 'EN'
+                const viewers = link.viewers ? `${link.viewers} viewers` : ''
+                
+                streams.push({
+                  name: `Streamed.pk\n${source.source.toUpperCase()}`,
+                  title: `Stream ${link.streamNo} | ${quality} | ${lang}\n${viewers}`,
+                  url: result.m3u8,
+                  behaviorHints: {
+                    notWebReady: true,
+                    proxyHeaders: {
+                      request: {
+                        "Origin": "https://embed.st",
+                        "Referer": "https://embed.st/"
+                      }
+                    }
                   }
-                }
+                })
               }
-            })
+            } catch (e) {
+              console.error(`Failed resolving stream ${link.streamNo} for ${source.source}:`, e)
+            }
           }
         } catch (e) {
-          console.error(`Failed resolving stream for ${source.source}:`, e)
+          console.error(`Failed fetching links for ${source.source}:`, e)
         }
       }
 
