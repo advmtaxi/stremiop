@@ -20,7 +20,9 @@ export async function route(req, res) {
     return
   }
 
-  const loc = new URL(req.url ?? '/', `http://${req.headers.host}`)
+  const proto = req.headers['x-forwarded-proto'] || 'http'
+  const host = req.headers['x-forwarded-host'] || req.headers.host
+  const loc = new URL(req.url ?? '/', `${proto}://${host}`)
   const { pathname, searchParams, origin } = loc
 
   try {
