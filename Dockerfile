@@ -15,8 +15,8 @@ COPY public/ ./public/
 
 # Bind to all network interfaces for Hugging Face/Docker
 ENV HOST="0.0.0.0"
-ENV PORT=3000
+ENV PORT=7860
 
-EXPOSE 3000
+EXPOSE 7860
 
 CMD [ "npm", "start" ]
