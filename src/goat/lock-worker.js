@@ -108,7 +108,6 @@ function mockFetch(NativeResponse, goat, body, onM3u8) {
 function patchImports(imports, NativeResponse, goat, body, onM3u8) {
   if (!imports) return
   
-  // Obfuscator may have renamed the module key, so find the object that contains __wbg_ functions
   let bgKey = null
   for (const key in imports) {
     if (key === './locked_bg.js' || key === 'wbg') {
@@ -127,50 +126,60 @@ function patchImports(imports, NativeResponse, goat, body, onM3u8) {
     if (bgKey) break
   }
   
-  if (!bgKey || !imports[bgKey]) return
+  const bg = (bgKey && imports[bgKey]) ? imports[bgKey] : {}
   
-  const bg = imports[bgKey]
-  imports['./locked_bg.js'] = bg // alias it so WASM finds it explicitly
-  
-  for (const key in bg) {
-    if (!key.includes('instanceof')) continue
-    const orig = bg[key]
-    if (typeof orig === 'function') {
-      bg[key] = (...args) => (orig(...args) ? 1 : 1)
-    }
-  }
-
-  let fetchKey = null
-  for (const key in bg) {
-    if (key.includes('fetch_e6e8e0')) {
-      fetchKey = key
-      break
-    }
-  }
-
-  if (fetchKey) {
-    bg[fetchKey] = (_win, req) => {
-      const href = req?.url ?? ''
-      if (href.includes('/fetch')) {
-        return Promise.resolve(
-          new NativeResponse(body, {
-            status: 200,
-            headers: { goat, 'Content-Type': 'application/octet-stream' },
-          }),
-        )
+  const proxyBg = new Proxy(bg, {
+    get(target, prop) {
+      if (typeof prop === 'string') {
+        if (prop.includes('instanceof')) {
+          return (...args) => {
+            const orig = target[prop]
+            if (typeof orig === 'function') return orig(...args) ? 1 : 1
+            return 1
+          }
+        }
+        if (prop.includes('fetch_e6e8e0')) {
+          return (_win, req) => {
+            const href = req?.url ?? ''
+            if (href.includes('/fetch')) {
+              return Promise.resolve(
+                new NativeResponse(body, {
+                  status: 200,
+                  headers: { goat, 'Content-Type': 'application/octet-stream' },
+                }),
+              )
+            }
+            if (href.includes('.m3u8')) {
+              onM3u8(href)
+              return Promise.resolve(
+                new NativeResponse('#EXTM3U\n#EXT-X-VERSION:3\n', {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/vnd.apple.mpegurl' },
+                }),
+              )
+            }
+            return Promise.reject(new Error(`unexpected wasm fetch ${href}`))
+          }
+        }
       }
-      if (href.includes('.m3u8')) {
-        onM3u8(href)
-        return Promise.resolve(
-          new NativeResponse('#EXTM3U\n#EXT-X-VERSION:3\n', {
-            status: 200,
-            headers: { 'Content-Type': 'application/vnd.apple.mpegurl' },
-          }),
-        )
+      
+      const orig = target[prop]
+      if (orig !== undefined) {
+        if (typeof orig === 'function') {
+          return orig.bind(target)
+        }
+        return orig
       }
-      return Promise.reject(new Error(`unexpected wasm fetch ${href}`))
+      
+      // Provide dummy callable for ANY missing function that WASM requests
+      return function(...args) {
+        return 0
+      }
     }
-  }
+  })
+
+  imports['./locked_bg.js'] = proxyBg
+  if (bgKey) imports[bgKey] = proxyBg
 }
 
 async function crack(slot, goat, bodyHex) {
@@ -185,19 +194,6 @@ async function crack(slot, goat, bodyHex) {
   const origInstantiate = WebAssembly.instantiate.bind(WebAssembly)
 
   WebAssembly.instantiate = async (source, imports) => {
-    try {
-      console.log('--- WebAssembly.instantiate called! ---')
-      console.log('imports keys:', Object.keys(imports || {}))
-      for (const key of Object.keys(imports || {})) {
-        console.log(`imports[${key}] type:`, typeof imports[key])
-        if (imports[key] && typeof imports[key] === 'object') {
-          console.log(`imports[${key}] keys:`, Object.keys(imports[key]))
-        }
-      }
-    } catch (err) {
-      console.log('Log error:', err.message)
-    }
-
     patchImports(imports, NativeResponse, goat, body, (url) => {
       m3u8 = url
     })
