@@ -1,4 +1,4 @@
-export const port = Number(process.env.PORT) || 3000
+export const port = Number(process.env.PORT) || 7860
 
 export const streamedOrigin = process.env.STREAMED_ORIGIN || 'https://streamed.pk'
 

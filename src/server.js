@@ -10,5 +10,5 @@ function boot() {
   console.log(`http://${host}/`)
 }
 
-if (process.env.HOST) srv.listen(port, process.env.HOST, boot)
-else srv.listen(port, boot)
+const hostBinding = process.env.HOST || '0.0.0.0'
+srv.listen(port, hostBinding, boot)
