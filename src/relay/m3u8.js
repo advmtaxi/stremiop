@@ -32,22 +32,19 @@ function rewrite(text, base, slot, origin) {
         if (!t.includes('URI="')) return line
         return t.replace(/URI="([^"]+)"/g, (_, uri) => {
           const href = absUri(uri, base)
-          return `URI="${relayLink(origin, href, slot)}"`
+          if (href.includes('.m3u8')) return `URI="${relayLink(origin, href, slot)}"`
+          return `URI="${href}"`
         })
       }
-      return relayLink(origin, absUri(t, base), slot)
+      const href = absUri(t, base)
+      if (href.includes('.m3u8')) return relayLink(origin, href, slot)
+      return href
     })
     .join('\n')
 }
 
 async function relay(res, url, slot, origin) {
-  let fetchUrl = url
-  try {
-    const u = new URL(url)
-    fetchUrl = `https://streamedpk.b-cdn.net//${u.pathname.replace(/^\//, '')}${u.search}`
-  } catch (err) {}
-
-  const raw = await pull(fetchUrl, slot)
+  const raw = await pull(url, slot)
 
   if (isPlaylist(raw)) {
     res.writeHead(200, {
