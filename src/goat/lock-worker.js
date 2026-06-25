@@ -106,29 +106,50 @@ function mockFetch(NativeResponse, goat, body, onM3u8) {
 }
 
 function patchImports(imports, NativeResponse, goat, body, onM3u8) {
-  // Obfuscator may have renamed the module key, so find the object
-  const keys = Object.keys(imports || {})
-  let bgKey = keys.find(k => k === './locked_bg.js' || k === 'wbg')
-  if (!bgKey && keys.length > 0) {
-    bgKey = keys.find(k => typeof imports[k] === 'object')
+  if (!imports) return
+  
+  // Obfuscator may have renamed the module key, so find the object that contains __wbg_ functions
+  let bgKey = null
+  for (const key in imports) {
+    if (key === './locked_bg.js' || key === 'wbg') {
+      bgKey = key
+      break
+    }
+    const obj = imports[key]
+    if (obj && typeof obj === 'object') {
+      for (const prop in obj) {
+        if (prop.includes('__wbg_')) {
+          bgKey = key
+          break
+        }
+      }
+    }
+    if (bgKey) break
   }
   
   if (!bgKey || !imports[bgKey]) return
   
   const bg = imports[bgKey]
-  const newBg = { ...bg } // Clone to avoid TypeError on frozen namespace objects
-
-  for (const key of Object.keys(newBg)) {
+  imports['./locked_bg.js'] = bg // alias it so WASM finds it explicitly
+  
+  for (const key in bg) {
     if (!key.includes('instanceof')) continue
-    const orig = newBg[key]
+    const orig = bg[key]
     if (typeof orig === 'function') {
-      newBg[key] = (...args) => (orig(...args) ? 1 : 1)
+      bg[key] = (...args) => (orig(...args) ? 1 : 1)
     }
   }
 
-  const fetchKey = Object.keys(newBg).find((k) => k.includes('fetch_e6e8e0'))
+  let fetchKey = null
+  for (const key in bg) {
+    if (key.includes('fetch_e6e8e0')) {
+      fetchKey = key
+      break
+    }
+  }
+
   if (fetchKey) {
-    newBg[fetchKey] = (_win, req) => {
+    bg[fetchKey] = (_win, req) => {
       const href = req?.url ?? ''
       if (href.includes('/fetch')) {
         return Promise.resolve(
@@ -150,10 +171,6 @@ function patchImports(imports, NativeResponse, goat, body, onM3u8) {
       return Promise.reject(new Error(`unexpected wasm fetch ${href}`))
     }
   }
-  
-  // Ensure the WASM engine finds exactly what it expects
-  imports['./locked_bg.js'] = newBg
-  imports[bgKey] = newBg
 }
 
 async function crack(slot, goat, bodyHex) {
@@ -168,14 +185,13 @@ async function crack(slot, goat, bodyHex) {
   const origInstantiate = WebAssembly.instantiate.bind(WebAssembly)
 
   WebAssembly.instantiate = async (source, imports) => {
-    const newImports = { ...imports }
-    patchImports(newImports, NativeResponse, goat, body, (url) => {
+    patchImports(imports, NativeResponse, goat, body, (url) => {
       m3u8 = url
     })
     if (!(source instanceof ArrayBuffer) && !ArrayBuffer.isView(source)) {
       source = wasmBytes.buffer.slice(wasmBytes.byteOffset, wasmBytes.byteOffset + wasmBytes.byteLength)
     }
-    return origInstantiate(source, newImports)
+    return origInstantiate(source, imports)
   }
   WebAssembly.instantiateStreaming = async (_resp, imports) => WebAssembly.instantiate(wasmBytes, imports)
 
